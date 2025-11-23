@@ -1,6 +1,5 @@
 package com.nickolss.madeforyou.screens
 
-import android.view.Surface
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,26 +9,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,25 +43,36 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nickolss.madeforyou.components.MadeForYouLogo
+import com.nickolss.madeforyou.data.AuthRepository
 import com.nickolss.madeforyou.ui.theme.Indigo500
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
-    onLoginClick: (String, String) -> Unit,
+    authRepository: AuthRepository,
+    onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit
 ) {
+    // Estados dos campos
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    Surface(
+    // Estados de UI
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Escopo para coroutines
+    val scope = rememberCoroutineScope()
+
+    Scaffold(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Column (
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .systemBarsPadding()
+                .padding(innerPadding)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -70,41 +82,49 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Acesse para continuar sua jornada.",
+                text = "Bem-vindo de volta",
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.Gray
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Campos de Entrada
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage!!,
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Seu e-mail *") },
+                label = { Text("E-mail") },
                 modifier = Modifier.fillMaxWidth(),
-                // Logo e Título
                 shape = RoundedCornerShape(12.dp),
+                singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
                     imeAction = ImeAction.Next
-                ),
-                singleLine = true
+                )
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // --- CAMPO SENHA ---
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = { Text("Sua senha *") },
+                label = { Text("Senha") },
                 trailingIcon = {
                     val image = if (passwordVisible)
                         Icons.Filled.Visibility
                     else Icons.Filled.VisibilityOff
 
-                    IconButton (onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(imageVector = image, contentDescription = null)
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = image, contentDescription = if (passwordVisible) "Ocultar senha" else "Mostrar senha")
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -119,26 +139,51 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Botão de Login
             Button(
-                onClick = { onLoginClick(email, password) },
+                onClick = {
+                    if (email.isBlank() || password.isBlank()) {
+                        errorMessage = "Preencha todos os campos"
+                        return@Button
+                    }
+
+                    scope.launch {
+                        isLoading = true
+                        errorMessage = null
+
+                        val result = authRepository.login(email, password)
+                        isLoading = false
+
+                        result.onSuccess {
+                            onLoginSuccess()
+                        }.onFailure { e ->
+                            errorMessage = "Email ou senha incorretos"
+                        }
+                    }
+                },
+                enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Indigo500)
             ) {
-                Text(
-                    text = "Entrar",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                } else {
+                    Text(
+                        text = "Entrar",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Footer para Registro
-            Row (
+            Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = "Não tem uma conta? ", color = Color.Gray)
@@ -146,7 +191,9 @@ fun LoginScreen(
                     text = "Cadastre-se",
                     color = Indigo500,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { onNavigateToRegister() }
+                    modifier = Modifier.clickable {
+                        if (!isLoading) onNavigateToRegister()
+                    }
                 )
             }
         }
